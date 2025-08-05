@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Double Pendulum Simulator</title>
+  <style>
+    /* Reset and Layout */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body { display: flex; flex-direction: column; align-items: center; background: #f0f0f0; font-family: sans-serif; }
+    h2 { margin: 10px 0; }
+    #canvas-container { flex: 3; display: flex; align-items: center; justify-content: center; width: 100%; }
+    canvas { max-width: 100%; max-height: 100%; width: auto; height: 100%; background: #fff; border-radius: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    canvas { max-width: 100%; max-height: 100%; background: #fff; border-radius: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+
+    /* Controls at bottom */
+    .controls { width: 100%; max-width: 900px; background: #fff; padding: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap: 10px; border-top: 1px solid #ddd; }
+    fieldset { border: 1px solid #ccc; border-radius: 6px; padding: 8px; background: #fafafa; }
+    legend { padding: 0 6px; font-weight: bold; }
+
+    /* Buttons uniform */
+    .icon-button {
+      width: 100%;
+      padding: 6px;
+      margin: 4px 0;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fff;
+      text-align: center;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .icon-button.active {
+      background-color: #007bff;
+      color: #fff;
+      border-color: #0056b3;
+    }
+    .icon-button:hover { background: #e6e6e6; }
+
+    /* Sliders */
+    input[type=range] { width: 100%; }
+    input[type=checkbox] { margin-right: 6px; }
+
+    /* Legend box */
+    #legend { position: absolute; top: 60px; right: 20px; background: rgba(255,255,255,0.8); padding: 6px; border-radius: 4px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h2>Double Pendulum Simulator</h2>
+  <div id="canvas-container">
+    <canvas id="canvas"></canvas>
+    <div id="legend"></div>
+  </div>
+
+  <div class="controls">
+    <fieldset>
+      <legend>Presets & Actions</legend>
+      <button class="icon-button" id="preset9">9 o'clock</button>
+      <button class="icon-button" id="preset12">12 o'clock</button>
+      <button class="icon-button" id="preset3">3 o'clock</button>
+      <button class="icon-button" id="setVertical">Vertical</button>
+      <button class="icon-button" id="newTrial">New Trial</button>
+      <button class="icon-button" id="clearLast">Clear Last</button>
+      <button class="icon-button" id="clearAll">Clear All</button>
+      <button class="icon-button" id="pauseResume">Pause</button>
+    </fieldset>
+    <fieldset>
+      <legend>Parameters</legend>
+      <label>Force @6 o'clock:<br><input id="forceSlider" type="range" min="0" max="1" step="0.01" value="0"></label>
+      <label>Speed:<br><input id="speedSlider" type="range" min="0.1" max="5" step="0.1" value="2"></label>
+      <label><input type="checkbox" id="blackLightToggle">Black Light Mode</label>
+    </fieldset>
+  </div>
+
+  <script>
+    // Resize the canvas
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    function resizeCanvas() {
+      const rect = document.getElementById('canvas-container').getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Physics constants
+    const g = 9.81;
+    const m1 = 10, m2 = 10;
+    let l1, l2;
+
+    // State
+    let theta1, theta2, omega1, omega2;
+    let initialTheta1, initialTheta2;
+
+    // Traces
+    const neonColors = ['#39FF14','#FF073A','#FFFF3F','#0ABAB5','#FF00FF','#FF8000'];
+    let traces = [], currentTrace = null, colorIndex = 0;
+
+    // Controls
+    let timeScale = 2;
+    let force = 0;
+    let paused = false;
+    let blackLight = false;
+
+    // Legend update
+    function updateLegend() {
+      const legend = document.getElementById('legend'); legend.innerHTML = '';
+      traces.forEach((t,i)=>{
+        const div = document.createElement('div');
+        div.style.display='flex';div.style.alignItems='center';div.style.gap='4px';
+        const sw = document.createElement('span');
+        sw.style.width='12px';sw.style.height='12px';sw.style.backgroundColor=t.color;sw.style.display='inline-block';
+        div.appendChild(sw);
+        div.appendChild(document.createTextNode(`Trial ${i+1}`));
+        legend.appendChild(div);
+      });
+    }
+
+    // Initialize state
+    function initState() {
+      theta1 = -Math.PI/2; theta2 = -Math.PI/2;
+      omega1 = 0; omega2 = 0;
+      initialTheta1 = theta1; initialTheta2 = theta2;
+      traces = []; currentTrace = null; colorIndex = 0;
+      updateLegend();
+    }
+    initState();
+
+    // UI listeners
+    document.getElementById('speedSlider').addEventListener('input', e=> timeScale=parseFloat(e.target.value));
+    document.getElementById('forceSlider').addEventListener('input', e=> force=parseFloat(e.target.value));
+    document.getElementById('pauseResume').addEventListener('click', e=>{
+      paused = !paused; e.target.textContent = paused ? 'Resume':'Pause';
+    });
+    document.getElementById('blackLightToggle').addEventListener('change', e=>{
+      blackLight = e.target.checked;
+      canvas.style.background = blackLight ? '#000' : '#fff';
+    });
+
+    document.getElementById('newTrial').addEventListener('click', ()=>{
+      theta1 = initialTheta1 + (Math.random()*2-1)*0.005;
+      theta2 = initialTheta2 + (Math.random()*2-1)*0.005;
+      omega1=omega2=0;
+      const color = neonColors[colorIndex%neonColors.length]; colorIndex++;
+      currentTrace={points:[],color}; traces.push(currentTrace); updateLegend();
+    });
+    document.getElementById('clearLast').addEventListener('click', ()=>{traces.pop(); currentTrace=traces[traces.length-1]||null; updateLegend();});
+    document.getElementById('clearAll').addEventListener('click', ()=>{initState();});
+    ['9','12','3'].forEach(k=> document.getElementById('preset'+k).addEventListener('click', ()=>{
+      initialTheta1=initialTheta2={'9':-Math.PI/2,'12':Math.PI,'3':Math.PI/2}[k];
+      ['preset9','preset12','preset3'].forEach(id=> document.getElementById(id).classList.toggle('active',id==='preset'+k));
+    }));
+    document.getElementById('setVertical').addEventListener('click', ()=>{theta1=theta2=0;omega1=omega2=0; drawPendulum();});
+
+    // Physics update
+    function physics(dt) {
+      l1 = canvas.height * 0.3; l2 = canvas.height * 0.3;
+      const num1 = -g*(2*m1+m2)*Math.sin(theta1)
+                 - m2*g*Math.sin(theta1-2*theta2)
+                 - 2*Math.sin(theta1-theta2)*m2*(omega2*omega2*l2+omega1*omega1*l1*Math.cos(theta1-theta2));
+      const den1 = l1*(2*m1+m2 - m2*Math.cos(2*(theta1-theta2)));
+      const a1 = num1/den1;
+      const num2 = 2*Math.sin(theta1-theta2)*(omega1*omega1*l1*(m1+m2)
+                 + g*(m1+m2)*Math.cos(theta1)
+                 + omega2*omega2*l2*m2*Math.cos(theta1-theta2));
+      const den2 = l2*(2*m1+m2 - m2*Math.cos(2*(theta1-theta2)));
+      const a2 = num2/den2;
+      omega1 += a1*dt; omega2 += a2*dt;
+      if(Math.abs(theta2)<0.05) omega2 += Math.sign(omega2)*force;
+      theta1 += omega1*dt; theta2 += omega2*dt;
+    }
+
+    // Draw functions
+    function drawTraces() {
+      traces.forEach(trace=>{
+        const pts = trace.points;
+        if(pts.length<2) return;
+        ctx.beginPath(); ctx.strokeStyle=trace.color; ctx.lineWidth=2;
+        ctx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y);
+        ctx.stroke();
+      });
+    }
+    
+    function drawPendulum() {
+      const oX = canvas.width/2, oY = canvas.height*0.1;
+      const x1 = oX + l1*Math.sin(theta1), y1 = oY + l1*Math.cos(theta1);
+      const x2 = x1 + l2*Math.sin(theta2), y2 = y1 + l2*Math.cos(theta2);
+      if(currentTrace) currentTrace.points.push({x:x2,y:y2});
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      drawTraces();
+      ctx.beginPath(); ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.moveTo(oX,oY); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+      ctx.fillStyle=blackLight?'#000':'#555'; ctx.beginPath(); ctx.arc(x1,y1,10,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(x2,y2,10,0,Math.PI*2); ctx.fill();
+    }
+
+    // Animation loop
+    let lastTime = 0;
+    function animate(ts) { if(!paused) { const dt = ((ts-lastTime)/1000)*timeScale; physics(dt); drawPendulum(); } lastTime = ts; requestAnimationFrame(animate); }
+
+    // Start simulation
+    document.getElementById('newTrial').click();
+    animate(0);
+  </script>
+</body>
+</html>
