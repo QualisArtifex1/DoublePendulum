@@ -1,206 +1,318 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Double Pendulum Simulator</title>
-  <style>
-    /* Reset and Layout */
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; }
-    body { display: flex; flex-direction: column; align-items: center; background: #f0f0f0; font-family: sans-serif; }
-    h2 { margin: 10px 0; }
-    #canvas-container { flex: 3; display: flex; align-items: center; justify-content: center; width: 100%; }
-    canvas { max-width: 100%; max-height: 100%; width: auto; height: 100%; background: #fff; border-radius: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-    canvas { max-width: 100%; max-height: 100%; background: #fff; border-radius: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-
-    /* Controls at bottom */
-    .controls { width: 100%; max-width: 900px; background: #fff; padding: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap: 10px; border-top: 1px solid #ddd; }
-    fieldset { border: 1px solid #ccc; border-radius: 6px; padding: 8px; background: #fafafa; }
-    legend { padding: 0 6px; font-weight: bold; }
-
-    /* Buttons uniform */
-    .icon-button {
-      width: 100%;
-      padding: 6px;
-      margin: 4px 0;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      background: #fff;
-      text-align: center;
-      cursor: pointer;
-      transition: background-color 0.2s;
-    }
-    .icon-button.active {
-      background-color: #007bff;
-      color: #fff;
-      border-color: #0056b3;
-    }
-    .icon-button:hover { background: #e6e6e6; }
-
-    /* Sliders */
-    input[type=range] { width: 100%; }
-    input[type=checkbox] { margin-right: 6px; }
-
-    /* Legend box */
-    #legend { position: absolute; top: 60px; right: 20px; background: rgba(255,255,255,0.8); padding: 6px; border-radius: 4px; font-size: 14px; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Double Pendulum — Deterministic (seed=42), 1024×1024</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121822; --ink:#e6edf3; --muted:#9fb0c0;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,Segoe UI,Roboto,Arial,sans-serif}
+  .wrap{display:flex;gap:14px;align-items:flex-start;justify-content:center;padding:16px;}
+  canvas{background:#05070a;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+  .panel{min-width:320px;max-width:420px;background:var(--panel);border:1px solid rgba(255,255,255,.05);border-radius:12px;padding:14px;box-shadow:0 6px 18px rgba(0,0,0,.5);position:sticky;top:16px}
+  .panel h1{font-size:16px;margin:0 0 10px 0}
+  .row{display:grid;grid-template-columns:1fr minmax(120px, 1.3fr) auto;gap:8px;align-items:center;margin:8px 0}
+  .row label{color:var(--muted)}
+  .row input[type=range]{width:100%}
+  .buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  button{background:#1c2330;color:var(--ink);border:1px solid rgba(255,255,255,.08);padding:8px 10px;border-radius:10px;cursor:pointer}
+  button:active{transform:translateY(1px)}
+  .meta{color:var(--muted);font-size:12px;margin-top:10px}
+  .hint{color:#89b4ff;font-size:12px;margin-top:8px}
+  .small{font-size:12px;color:var(--muted)}
+  code{background:#0f1520;padding:2px 6px;border-radius:6px}
+</style>
 </head>
 <body>
-  <h2>Double Pendulum Simulator</h2>
-  <div id="canvas-container">
-    <canvas id="canvas"></canvas>
-    <div id="legend"></div>
+  <div class="wrap">
+    <canvas id="pendulum" width="1024" height="1024" aria-label="Double pendulum visualization (1024×1024)"></canvas>
+
+    <div class="panel" role="group" aria-label="Controls">
+      <h1>Double Pendulum — <span class="small">deterministic with seed <code>42</code></span></h1>
+
+      <div class="row"><label for="m1">Mass 1</label>
+        <input id="m1" type="range" min="0.1" max="10" step="0.1" value="3.0">
+        <span id="m1v">3.0</span></div>
+
+      <div class="row"><label for="m2">Mass 2</label>
+        <input id="m2" type="range" min="0.1" max="10" step="0.1" value="2.5">
+        <span id="m2v">2.5</span></div>
+
+      <div class="row"><label for="l1">Length 1 (px)</label>
+        <input id="l1" type="range" min="50" max="480" step="1" value="260">
+        <span id="l1v">260</span></div>
+
+      <div class="row"><label for="l2">Length 2 (px)</label>
+        <input id="l2" type="range" min="50" max="480" step="1" value="210">
+        <span id="l2v">210</span></div>
+
+      <div class="row"><label for="grav">Gravity (px/s²)</label>
+        <input id="grav" type="range" min="10" max="2000" step="10" value="980">
+        <span id="gravv">980</span></div>
+
+      <div class="row"><label for="damp">Damping (/s)</label>
+        <input id="damp" type="range" min="0" max="0.05" step="0.001" value="0.002">
+        <span id="dampv">0.0020</span></div>
+
+      <div class="row"><label for="spf">Steps / frame</label>
+        <input id="spf" type="range" min="1" max="12" step="1" value="4">
+        <span id="spfv">4</span></div>
+
+      <div class="row"><label for="trail">Trail length</label>
+        <input id="trail" type="range" min="0" max="5000" step="50" value="2000">
+        <span id="trailv">2000</span></div>
+
+      <div class="row"><label for="alpha">Trail fade</label>
+        <input id="alpha" type="range" min="0.02" max="0.8" step="0.01" value="0.18">
+        <span id="alphav">0.18</span></div>
+
+      <div class="row"><label for="size">Bob size (px)</label>
+        <input id="size" type="range" min="4" max="22" step="1" value="10">
+        <span id="sizev">10</span></div>
+
+      <div class="buttons">
+        <button id="toggle">⏸️ Pause</button>
+        <button id="reset">♻️ Reset (seed 42)</button>
+        <button id="clear">🧹 Clear trails</button>
+        <button id="snap">📸 Snapshot</button>
+      </div>
+
+      <div class="hint">Integration uses RK4 with fixed time step (dt = 1/240 s) for deterministic behavior.
+        Reset restores seed-based initial angles so runs are reproducible.</div>
+      <div class="meta">FPS: <span id="fps">—</span> · Steps simulated: <span id="steps">0</span></div>
+    </div>
   </div>
 
-  <div class="controls">
-    <fieldset>
-      <legend>Presets & Actions</legend>
-      <button class="icon-button" id="preset9">9 o'clock</button>
-      <button class="icon-button" id="preset12">12 o'clock</button>
-      <button class="icon-button" id="preset3">3 o'clock</button>
-      <button class="icon-button" id="setVertical">Vertical</button>
-      <button class="icon-button" id="newTrial">New Trial</button>
-      <button class="icon-button" id="clearLast">Clear Last</button>
-      <button class="icon-button" id="clearAll">Clear All</button>
-      <button class="icon-button" id="pauseResume">Pause</button>
-    </fieldset>
-    <fieldset>
-      <legend>Parameters</legend>
-      <label>Force @6 o'clock:<br><input id="forceSlider" type="range" min="0" max="1" step="0.01" value="0"></label>
-      <label>Speed:<br><input id="speedSlider" type="range" min="0.1" max="5" step="0.1" value="2"></label>
-      <label><input type="checkbox" id="blackLightToggle">Black Light Mode</label>
-    </fieldset>
-  </div>
+<script>
+// ——— Deterministic PRNG (mulberry32) ———
+function mulberry32(seed){
+  let t = seed >>> 0;
+  return function(){
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  }
+}
 
-  <script>
-    // Resize the canvas
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    function resizeCanvas() {
-      const rect = document.getElementById('canvas-container').getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-    }
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
+// Global constants
+const SEED = 42;          // fixed seed for reproducibility
+const DT = 1/240;         // fixed simulation step (seconds)
 
-    // Physics constants
-    const g = 9.81;
-    const m1 = 10, m2 = 10;
-    let l1, l2;
+// Canvas setup
+const canvas = document.getElementById('pendulum');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const origin = { x: W/2, y: H/4 }; // anchor point a quarter from top
 
-    // State
-    let theta1, theta2, omega1, omega2;
-    let initialTheta1, initialTheta2;
+// UI helpers
+function bindRange(id, fmt=(v)=>v){
+  const el = document.getElementById(id);
+  const out = document.getElementById(id+"v");
+  const write = ()=> out.textContent = fmt(Number(el.value));
+  el.addEventListener('input', write); write();
+  return el;
+}
 
-    // Traces
-    const neonColors = ['#39FF14','#FF073A','#FFFF3F','#0ABAB5','#FF00FF','#FF8000'];
-    let traces = [], currentTrace = null, colorIndex = 0;
+const m1El = bindRange('m1', v=>v.toFixed(1));
+const m2El = bindRange('m2', v=>v.toFixed(1));
+const l1El = bindRange('l1');
+const l2El = bindRange('l2');
+const gEl  = bindRange('grav');
+const dEl  = bindRange('damp', v=>v.toFixed(4));
+const spfEl= bindRange('spf');
+const trailEl = bindRange('trail');
+const alphaEl = bindRange('alpha', v=>v.toFixed(2));
+const sizeEl = bindRange('size');
 
-    // Controls
-    let timeScale = 2;
-    let force = 0;
-    let paused = false;
-    let blackLight = false;
+const fpsEl = document.getElementById('fps');
+const stepsEl = document.getElementById('steps');
 
-    // Legend update
-    function updateLegend() {
-      const legend = document.getElementById('legend'); legend.innerHTML = '';
-      traces.forEach((t,i)=>{
-        const div = document.createElement('div');
-        div.style.display='flex';div.style.alignItems='center';div.style.gap='4px';
-        const sw = document.createElement('span');
-        sw.style.width='12px';sw.style.height='12px';sw.style.backgroundColor=t.color;sw.style.display='inline-block';
-        div.appendChild(sw);
-        div.appendChild(document.createTextNode(`Trial ${i+1}`));
-        legend.appendChild(div);
-      });
-    }
+// Buttons
+const toggleBtn = document.getElementById('toggle');
+const resetBtn = document.getElementById('reset');
+const clearBtn = document.getElementById('clear');
+const snapBtn = document.getElementById('snap');
 
-    // Initialize state
-    function initState() {
-      theta1 = -Math.PI/2; theta2 = -Math.PI/2;
-      omega1 = 0; omega2 = 0;
-      initialTheta1 = theta1; initialTheta2 = theta2;
-      traces = []; currentTrace = null; colorIndex = 0;
-      updateLegend();
-    }
-    initState();
+// Simulation state
+let a1, a2, w1, w2; // angles and angular velocities
+let trail = [];     // trail of bob2 positions
+let playing = true;
+let stepCount = 0;
 
-    // UI listeners
-    document.getElementById('speedSlider').addEventListener('input', e=> timeScale=parseFloat(e.target.value));
-    document.getElementById('forceSlider').addEventListener('input', e=> force=parseFloat(e.target.value));
-    document.getElementById('pauseResume').addEventListener('click', e=>{
-      paused = !paused; e.target.textContent = paused ? 'Resume':'Pause';
-    });
-    document.getElementById('blackLightToggle').addEventListener('change', e=>{
-      blackLight = e.target.checked;
-      canvas.style.background = blackLight ? '#000' : '#fff';
-    });
+function seededInitialState(){
+  const rng = mulberry32(SEED);
+  // Base angles around 3/4 pi and 1/2 pi, add tiny deterministic jitter
+  const base1 = Math.PI * 0.75;
+  const base2 = Math.PI * 0.35;
+  const jitter = (rng()*2-1) * 0.03; // ±0.03 rad
+  const jitter2 = (rng()*2-1) * 0.03;
+  a1 = base1 + jitter;
+  a2 = base2 + jitter2;
+  w1 = 0; w2 = 0;
+  trail = [];
+}
 
-    document.getElementById('newTrial').addEventListener('click', ()=>{
-      theta1 = initialTheta1 + (Math.random()*2-1)*0.005;
-      theta2 = initialTheta2 + (Math.random()*2-1)*0.005;
-      omega1=omega2=0;
-      const color = neonColors[colorIndex%neonColors.length]; colorIndex++;
-      currentTrace={points:[],color}; traces.push(currentTrace); updateLegend();
-    });
-    document.getElementById('clearLast').addEventListener('click', ()=>{traces.pop(); currentTrace=traces[traces.length-1]||null; updateLegend();});
-    document.getElementById('clearAll').addEventListener('click', ()=>{initState();});
-    ['9','12','3'].forEach(k=> document.getElementById('preset'+k).addEventListener('click', ()=>{
-      initialTheta1=initialTheta2={'9':-Math.PI/2,'12':Math.PI,'3':Math.PI/2}[k];
-      ['preset9','preset12','preset3'].forEach(id=> document.getElementById(id).classList.toggle('active',id==='preset'+k));
-    }));
-    document.getElementById('setVertical').addEventListener('click', ()=>{theta1=theta2=0;omega1=omega2=0; drawPendulum();});
+function reset(){
+  seededInitialState();
+  stepCount = 0;
+  clearCanvasHard();
+}
 
-    // Physics update
-    function physics(dt) {
-      l1 = canvas.height * 0.3; l2 = canvas.height * 0.3;
-      const num1 = -g*(2*m1+m2)*Math.sin(theta1)
-                 - m2*g*Math.sin(theta1-2*theta2)
-                 - 2*Math.sin(theta1-theta2)*m2*(omega2*omega2*l2+omega1*omega1*l1*Math.cos(theta1-theta2));
-      const den1 = l1*(2*m1+m2 - m2*Math.cos(2*(theta1-theta2)));
-      const a1 = num1/den1;
-      const num2 = 2*Math.sin(theta1-theta2)*(omega1*omega1*l1*(m1+m2)
-                 + g*(m1+m2)*Math.cos(theta1)
-                 + omega2*omega2*l2*m2*Math.cos(theta1-theta2));
-      const den2 = l2*(2*m1+m2 - m2*Math.cos(2*(theta1-theta2)));
-      const a2 = num2/den2;
-      omega1 += a1*dt; omega2 += a2*dt;
-      if(Math.abs(theta2)<0.05) omega2 += Math.sign(omega2)*force;
-      theta1 += omega1*dt; theta2 += omega2*dt;
-    }
+function clearCanvasHard(){
+  // Hard clear (also clears trails)
+  ctx.fillStyle = '#05070a';
+  ctx.fillRect(0,0,W,H);
+  // Draw anchor crosshair subtly
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  ctx.strokeStyle = '#0f1724';
+  ctx.beginPath();
+  ctx.moveTo(origin.x-12, origin.y); ctx.lineTo(origin.x+12, origin.y);
+  ctx.moveTo(origin.x, origin.y-12); ctx.lineTo(origin.x, origin.y+12);
+  ctx.stroke();
+  ctx.restore();
+}
 
-    // Draw functions
-    function drawTraces() {
-      traces.forEach(trace=>{
-        const pts = trace.points;
-        if(pts.length<2) return;
-        ctx.beginPath(); ctx.strokeStyle=trace.color; ctx.lineWidth=2;
-        ctx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y);
-        ctx.stroke();
-      });
-    }
-    
-    function drawPendulum() {
-      const oX = canvas.width/2, oY = canvas.height*0.1;
-      const x1 = oX + l1*Math.sin(theta1), y1 = oY + l1*Math.cos(theta1);
-      const x2 = x1 + l2*Math.sin(theta2), y2 = y1 + l2*Math.cos(theta2);
-      if(currentTrace) currentTrace.points.push({x:x2,y:y2});
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      drawTraces();
-      ctx.beginPath(); ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.moveTo(oX,oY); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-      ctx.fillStyle=blackLight?'#000':'#555'; ctx.beginPath(); ctx.arc(x1,y1,10,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(x2,y2,10,0,Math.PI*2); ctx.fill();
-    }
+function physicsDerivatives(state){
+  // state = [a1, a2, w1, w2]
+  const [A1, A2, W1, W2] = state;
+  const m1 = Number(m1El.value), m2 = Number(m2El.value);
+  const L1 = Number(l1El.value), L2 = Number(l2El.value);
+  const g  = Number(gEl.value);
 
-    // Animation loop
-    let lastTime = 0;
-    function animate(ts) { if(!paused) { const dt = ((ts-lastTime)/1000)*timeScale; physics(dt); drawPendulum(); } lastTime = ts; requestAnimationFrame(animate); }
+  const dA = A1 - A2;
+  const sin_dA = Math.sin(dA), cos_dA = Math.cos(dA);
+  const denom = 2*m1 + m2 - m2 * Math.cos(2*A1 - 2*A2);
 
-    // Start simulation
-    document.getElementById('newTrial').click();
-    animate(0);
-  </script>
+  const a1acc = (
+    -g*(2*m1+m2)*Math.sin(A1)
+    - m2*g*Math.sin(A1 - 2*A2)
+    - 2*sin_dA*m2*(W2*W2*L2 + W1*W1*L1*cos_dA)
+  ) / (L1*denom);
+
+  const a2acc = (
+    2*sin_dA * (
+      W1*W1*L1*(m1+m2) + g*(m1+m2)*Math.cos(A1) + W2*W2*L2*m2*cos_dA
+    )
+  ) / (L2*denom);
+
+  return [W1, W2, a1acc, a2acc];
+}
+
+// RK4 integrator for deterministic, stable stepping
+function rk4Step(state, dt){
+  const k1 = physicsDerivatives(state);
+  const s2 = state.map((v,i)=> v + 0.5*dt*k1[i]);
+  const k2 = physicsDerivatives(s2);
+  const s3 = state.map((v,i)=> v + 0.5*dt*k2[i]);
+  const k3 = physicsDerivatives(s3);
+  const s4 = state.map((v,i)=> v + dt*k3[i]);
+  const k4 = physicsDerivatives(s4);
+  return state.map((v,i)=> v + dt*(k1[i] + 2*k2[i] + 2*k3[i] + k4[i])/6);
+}
+
+function stepOnce(){
+  const damp = Number(dEl.value); // per-second damping on velocities
+  let state = [a1,a2,w1,w2];
+  state = rk4Step(state, DT);
+  // exponential damping per second
+  const factor = Math.max(0, 1 - damp*DT);
+  state[2] *= factor; state[3] *= factor;
+  [a1,a2,w1,w2] = state;
+  stepCount++;
+}
+
+function updateTrail(x,y){
+  const maxLen = Number(trailEl.value)|0;
+  trail.push({x,y});
+  if(trail.length>maxLen) trail.shift();
+}
+
+function draw(){
+  // Faded clear for motion trails
+  ctx.fillStyle = `rgba(5,7,10,${Number(alphaEl.value)})`;
+  ctx.fillRect(0,0,W,H);
+
+  const L1 = Number(l1El.value), L2 = Number(l2El.value);
+  const m1 = Number(m1El.value), m2 = Number(m2El.value);
+  const r  = Number(sizeEl.value);
+
+  // Positions
+  const x1 = origin.x + L1*Math.sin(a1);
+  const y1 = origin.y + L1*Math.cos(a1);
+  const x2 = x1 + L2*Math.sin(a2);
+  const y2 = y1 + L2*Math.cos(a2);
+
+  updateTrail(x2,y2);
+
+  // Draw trail (bob2)
+  if(trail.length>1){
+    ctx.beginPath();
+    ctx.moveTo(trail[0].x, trail[0].y);
+    for(let i=1;i<trail.length;i++) ctx.lineTo(trail[i].x, trail[i].y);
+    ctx.strokeStyle = '#4fc3f7';
+    ctx.lineWidth = 1.25;
+    ctx.globalAlpha = 0.8;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // Rods
+  ctx.strokeStyle = '#9fb0c0';
+  ctx.lineWidth = 2.0;
+  ctx.beginPath();
+  ctx.moveTo(origin.x, origin.y);
+  ctx.lineTo(x1,y1);
+  ctx.lineTo(x2,y2);
+  ctx.stroke();
+
+  // Bobs
+  ctx.fillStyle = '#e6edf3';
+  ctx.beginPath(); ctx.arc(x1,y1, r*Math.cbrt(m1/3), 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x2,y2, r*Math.cbrt(m2/3), 0, Math.PI*2); ctx.fill();
+
+  // Anchor
+  ctx.beginPath(); ctx.arc(origin.x,origin.y, 3, 0, Math.PI*2); ctx.fill();
+}
+
+// Animation loop
+let lastFpsT=performance.now(), frames=0;
+function loop(){
+  if(playing){
+    const stepsPerFrame = Number(spfEl.value)|0;
+    for(let i=0;i<stepsPerFrame;i++) stepOnce();
+    draw();
+    stepsEl.textContent = stepCount.toString();
+  }
+  frames++;
+  const now = performance.now();
+  if(now-lastFpsT>1000){ fpsEl.textContent = frames.toString(); frames=0; lastFpsT=now; }
+  requestAnimationFrame(loop);
+}
+
+// Button handlers
+
+toggleBtn.addEventListener('click',()=>{
+  playing = !playing;
+  toggleBtn.textContent = playing ? '⏸️ Pause' : '▶️ Play';
+});
+
+resetBtn.addEventListener('click',()=>{ reset(); });
+clearBtn.addEventListener('click',()=>{ clearCanvasHard(); trail=[]; });
+
+snapBtn.addEventListener('click',()=>{
+  const url = canvas.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = url; a.download = 'double_pendulum_seed42.png'; a.click();
+});
+
+// Initialize and start
+clearCanvasHard();
+reset();
+requestAnimationFrame(loop);
+</script>
 </body>
 </html>
